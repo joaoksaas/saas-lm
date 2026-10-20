@@ -1,0 +1,13 @@
+Cafeína no fim da tarde e qualidade do sono
+
+Resumo
+Este texto fictício, criado para testes, resume um experimento com 120 voluntários adultos, realizado pelo Instituto Nortelândia de Pesquisa do Sono ao longo de 8 semanas.
+
+Metodologia
+Os participantes foram divididos em três grupos de 40: o grupo 1 tomou 200 mg de cafeína às 16h, o grupo 2 tomou 200 mg às 10h e o grupo 3 recebeu placebo às 16h. O sono foi monitorado por faixas de pulso e avaliado por questionário semanal.
+
+Resultados
+O grupo 1 teve, em média, 18 minutos a menos de sono profundo por noite em comparação ao placebo. O grupo 2 não apresentou diferença estatisticamente significativa. O tempo para adormecer aumentou em média 12 minutos no grupo 1.
+
+Limitações
+Os autores destacam que o estudo não controlou o consumo de cafeína fora do protocolo e que a amostra tinha média de idade de 29 anos, o que limita a generalização para idosos.

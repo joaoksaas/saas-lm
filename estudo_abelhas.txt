@@ -1,0 +1,13 @@
+Manejo da abelha-de-vidro (Melipona vitrea) em ambiente de altitude
+
+Resumo
+Este texto fictício, criado para testes, descreve um estudo conduzido pela Dra. Helena Marques entre 2021 e 2023 com 48 colmeias de abelha-de-vidro, uma espécie sem ferrão, em regiões de altitude acima de 900 metros.
+
+Metodologia
+As colmeias foram divididas em dois grupos de 24. O grupo A recebeu caixas com isolamento de cortiça. O grupo B foi mantido em caixas de madeira comum. A temperatura interna foi medida a cada 6 horas.
+
+Resultados
+A temperatura interna ideal para a postura da rainha foi de 27 graus Celsius. O grupo A manteve essa faixa em 83% das medições, contra 51% do grupo B. A produção média de mel foi de 3,2 kg por colmeia ao ano no grupo A e de 2,1 kg no grupo B.
+
+Conclusão
+A autora conclui que o isolamento com cortiça aumenta a estabilidade térmica e a produtividade, e recomenda novos testes em altitudes superiores a 1.200 metros.

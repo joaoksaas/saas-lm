@@ -10,15 +10,18 @@ st.set_page_config(
 )
 
 CUSTOM_PROMPT = """
-Você é o "Saas LM", um assistente de leitura e interpretação artigos científicos e técnicos, com foco em auxiliar qualquer um que almeje estudar por meio de longos textos técnicos e científicos. Sua função é fornecer explicaç~eos detalhadas e ajudar na compreensão total do conteúdo fornecido pelo usuário. Você deve fornecer respostas claras, concisas e bem estruturadas, com exemplos de código quando necessário, para facilitar a compreensão do usuário. Você pode ainda gerar resumos, conteúdo para flashcards além de gerar perguntas de múltipla escolha para testar o conhecimento do usuário sobre o conteúdo fornecido.
+Você é o "Saas LM", um assistente de leitura e interpretação de artigos científicos e técnicos, com foco em auxiliar qualquer um que almeje estudar por meio de longos textos técnicos e científicos. Sua função é fornecer explicações detalhadas e ajudar na compreensão total do conteúdo fornecido pelo usuário. Você deve fornecer respostas claras, concisas e bem estruturadas, para facilitar a compreensão do usuário. Você pode ainda gerar resumos, conteúdo para flashcards conceituais (pergunta/resposta) além de gerar perguntas de múltipla escolha (de 4 a 5 alternativas) para testar o conhecimento do usuário sobre o conteúdo fornecido.
 
 REGRAS DE OPERAÇÃO:
-1. **Formato de Resposta**: A resposta sempre deve ser gerada com base, primariamente, no conteúdo do artigo ou texto técnico fornecido pelo usuário. Evite respostas genéricas ou que não estejam diretamente relacionadas ao conteúdo analisado.
-2. **Estrutura da Resposta**: Comece com uma explicação conceitual sobre o tópico ou problema apresentado. Em seguida, forneça exemplos de código claros e comentados, destacando as melhores práticas.
+1. **Formato de Resposta**: A resposta sempre deve ser gerada com base, primariamente, no conteúdo do artigo ou texto técnico fornecido pelo usuário. Evite respostas genéricas ou que não estejam diretamente relacionadas ao conteúdo analisado. Caso deseje fornecer informações externas adicionais, sinalize claramente que são informações externas e não parte do conteúdo fornecido pelo usuário. Sempre que possível, inclua exemplos práticos, analogias  para facilitar a compreensão do usuário.
+
+2. **Estrutura da Resposta**: Comece com uma explicação conceitual sobre o tópico ou problema apresentado caso o usuário solicite uma explicação. Além disso, sempre responda as perguntas do usuário no mesmo idioma em que foram feitas. Caso não haja nenhum documento selecionado para análise, informe o usuário dessa condição e solicite que ele faça o upload de um documento válido para análise. Caso não encontre o que o usuário solicitou nos documentos fornecidos, informe-o que não foi possível encontrar a informação solicitada nos documentos fornecidos e sugira que ele faça o upload de um documento válido para análise. 
+
 * **Explicações Detalhadas**: Cada exemplo deve ser acompanhado de uma explicação detalhada sobre como ele funciona, incluindo a lógica por trás das soluções propostas.
 * **Exemplos Práticos**: Sempre que possível, forneça exemplos práticos que demonstrem a aplicação do conteúdo em situações do cotidiano.
-* **Documentação e Referências**: Ao final, inclua uma seção chamada "Documentação de Referência" que forneça links para recursos adicionais, documentação oficial e tutoriais relevantes para o tópico discutido.
-3. **Clareza e Precisão**: Use uma linguagem clara e precisa, evitando jargões desnecessários. Certifique-se de que as explicações sejam compreensíveis para desenvolvedores iniciantes.
+* **Documentação e Referências**: Ao final, inclua uma seção chamada "Documentação de Referência" que indique de qual documento, previamente fornecido pelo usuário, a informação foi extraída.
+
+3. **Clareza e Precisão**: Use uma linguagem clara e precisa, evitando jargões desnecessários. Certifique-se de que as explicações sejam compreensíveis.
 """
 
 with st.sidebar:
@@ -42,9 +45,21 @@ with st.sidebar:
             st.session_state.docs[arquivo.name] = arquivo.read().decode("utf-8")
 
     nomes_enviados = {arquivo.name for arquivo in arquivos}
+
     for nome in list(st.session_state.docs):
         if nome not in nomes_enviados:
             del st.session_state.docs[nome]
+
+    st.markdown("---")
+    st.markdown("Selecione quais arquivos deseja usar para análise:")
+    
+    for nome, texto in st.session_state.docs.items():
+        st.checkbox(f"{nome} ({len(texto)} caracteres)", value=True, key=f"checkbox_{nome}")
+
+
+    # Documentos válidos - teste
+    # documentos_validos = [nome for nome in st.session_state.docs if st.session_state.get(f"checkbox_{nome}", True)]
+    # st.write(f"Documentos selecionados para análise: {', '.join(documentos_validos) if documentos_validos else 'Nenhum documento selecionado.'}")
 
     st.markdown("---")
     st.markdown("Desenvolvido para auxiliar no estudo e compreensão de artigos científicos e textos técnicos, fornecendo explicações detalhadas, exemplos práticos e recursos adicionais para aprimorar o aprendizado.")
@@ -78,6 +93,21 @@ elif st.session_state.messages:
 
 # Captura da entrda do usuário
 if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
+
+    # Transforma todos os documentos .txt em string e insere eles junto ao CUSTOM PROMPT
+    documentos_string = "DOCUMENTOS VÁLIDOS PARA ANÁLISE: \n\n"
+    vazio = False
+
+
+    for nome, texto in st.session_state.docs.items():
+        if st.session_state.get(f"checkbox_{nome}", True):
+            vazio = True
+            documentos_string += f"Nome: {nome} \n Conteúdo: {texto} \n\n\n"
+
+    if not vazio:
+        st.warning("Nenhum documento selecionado para análise. Por favor, selecione pelo menos um documento na barra lateral.")
+        st.stop()
+
     if not client:
         st.warning("Por favor, insira sua API key da Groq na barra lateral para continuar.")
         st.stop()
@@ -87,7 +117,7 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    messages_for_api = [{"role": "system", "content": CUSTOM_PROMPT}] + st.session_state.messages
+    messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + st.session_state.messages
 
     with st.chat_message("assistant"):
         with st.spinner("Gerando resposta..."):
@@ -95,7 +125,7 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
                 chat_completion = client.chat.completions.create(
                     model="openai/gpt-oss-20b",
                     messages=messages_for_api,
-                    temperature=0.8,
+                    temperature=0.4,
                     max_completion_tokens=2048,
                 )
 

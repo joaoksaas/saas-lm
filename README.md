@@ -46,8 +46,8 @@ Assistente de IA para conversar com seus próprios textos e artigos, inspirado n
 
 - [x] Chat com a IA
 - [x] Upload de arquivos .txt
-- [ ] Seleção dos arquivos ativos na conversa
-- [ ] Respostas baseadas no conteúdo dos arquivos
+- [x] Seleção dos arquivos ativos na conversa
+- [x] Respostas baseadas no conteúdo dos arquivos
 - [ ] Suporte a PDF e DOCX
 - [ ] Busca por trechos relevantes (RAG) para arquivos grandes
 - [ ] Citação da fonte em cada resposta
