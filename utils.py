@@ -1,5 +1,7 @@
 import pypdf
 import docx 
+import unicodedata
+import re
 
 def extrair_texto(arquivo):
     """
@@ -37,3 +39,50 @@ def extrair_texto(arquivo):
         return None
 
     return texto
+
+# Funções de RAG
+
+def dividir_chunks(texto, tamanho=1000, sobreposicao=200):
+    """
+    Divide o texto em chunks de tamanho especificado com sobreposicao.
+    """
+
+    if tamanho <= 0:
+        raise ValueError("O tamanho do chunk deve ser maior que zero.")
+
+    if sobreposicao >= tamanho:
+        raise ValueError("A sobreposição deve ser menor que o tamanho do chunk.")
+    
+    passo = tamanho - sobreposicao
+
+    chunks = []
+
+    for inicio in range(0, len(texto), passo):
+        pedaco = texto[inicio:inicio + tamanho]
+
+        if pedaco.strip():
+            chunks.append(pedaco)
+
+        if inicio + tamanho >= len(texto):
+            break
+
+    return chunks
+
+STOPWORDS = {
+    "a", "o", "as", "os", "um", "uma", "uns", "umas",
+    "de", "da", "do", "das", "dos", "em", "na", "no", "nas", "nos",
+    "por", "para", "com", "sem", "sobre", "entre", "ate",
+    "e", "ou", "mas", "que", "se", "como", "quando",
+    "qual", "quais", "quem", "onde", "quanto", "quantos", "quantas",
+    "foi", "foram", "ser", "sao", "era", "esta", "estao",
+    "ao", "aos", "pelo", "pela", "isso", "esse", "essa", "este", "ha",
+}
+
+def normalizar(texto):
+    texto = texto.lower()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    palavras = re.findall(r"\w+", texto)
+
+    return [p for p in palavras if p not in STOPWORDS]
+    

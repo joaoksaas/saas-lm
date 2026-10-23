@@ -1,4 +1,4 @@
-from utils import extrair_texto
+from utils import extrair_texto, dividir_chunks
 import streamlit as st
 from groq import Groq
 
@@ -37,7 +37,8 @@ with st.sidebar:
 
     st.markdown("---")
     if "docs" not in st.session_state:
-        st.session_state.docs = {}    
+        st.session_state.docs = {}
+        st.session_state.chunks = {}    
     
     arquivos = st.file_uploader("Faça o upload do seu documento PDF, DOCX ou TXT para análise:", type=["txt", "pdf", "docx"], help="O assistente irá analisar o conteúdo do arquivo e fornecer explicações detalhadas.", accept_multiple_files=True)
 
@@ -48,6 +49,7 @@ with st.sidebar:
 
                 if texto_extraido is not None:
                     st.session_state.docs[arquivo.name] = texto_extraido
+                    st.session_state.chunks[arquivo.name] = dividir_chunks(texto_extraido)
                 else:
                     st.warning(f"O arquivo {arquivo.name} não contém texto extraível ou está vazio. Por favor, envie um arquivo válido.")
 
@@ -58,18 +60,21 @@ with st.sidebar:
 
     for nome in list(st.session_state.docs):
         if nome not in nomes_enviados:
-            del st.session_state.docs[nome]
+            st.session_state.docs.pop(nome, None)
+            st.session_state.chunks.pop(nome, None)
 
     st.markdown("---")
     st.markdown("Selecione quais arquivos deseja usar para análise:")
     
     for nome, texto in st.session_state.docs.items():
+        #n_trechos = len(st.session_state.chunks.get(nome, []))
         st.checkbox(f"{nome} ({len(texto)} caracteres)", value=True, key=f"checkbox_{nome}")
 
 
     # Documentos válidos - teste
     # documentos_validos = [nome for nome in st.session_state.docs if st.session_state.get(f"checkbox_{nome}", True)]
     # st.write(f"Documentos selecionados para análise: {', '.join(documentos_validos) if documentos_validos else 'Nenhum documento selecionado.'}")
+    # st.write(list(st.session_state.chunks.keys()))
 
     st.markdown("---")
     st.markdown("Desenvolvido para auxiliar no estudo e compreensão de artigos científicos e textos técnicos, fornecendo explicações detalhadas, exemplos práticos e recursos adicionais para aprimorar o aprendizado.")
