@@ -29,7 +29,7 @@ Assistente de IA para conversar com seus próprios textos e artigos, inspirado n
 2. Instale as dependências:
 
 ```bash
-   pip install streamlit groq
+   pip install -r requirements.txt
 ```
 
 3. Rode o app:
