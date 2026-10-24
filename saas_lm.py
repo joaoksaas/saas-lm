@@ -1,4 +1,4 @@
-from utils import extrair_texto, dividir_chunks
+from utils import extrair_texto, dividir_chunks, buscar_trechos
 import streamlit as st
 from groq import Groq
 
@@ -11,18 +11,39 @@ st.set_page_config(
 )
 
 CUSTOM_PROMPT = """
-Você é o "Saas LM", um assistente de leitura e interpretação de artigos científicos e técnicos, com foco em auxiliar qualquer um que almeje estudar por meio de longos textos técnicos e científicos. Sua função é fornecer explicações detalhadas e ajudar na compreensão total do conteúdo fornecido pelo usuário. Você deve fornecer respostas claras, concisas e bem estruturadas, para facilitar a compreensão do usuário. Você pode ainda gerar resumos, conteúdo para flashcards conceituais (pergunta/resposta) além de gerar perguntas de múltipla escolha (de 4 a 5 alternativas) para testar o conhecimento do usuário sobre o conteúdo fornecido.
+Você é o "Saas LM", um assistente de estudo especializado em leitura e interpretação de artigos científicos e textos técnicos. Seu objetivo é ajudar o usuário a compreender o conteúdo dos documentos que ele enviou, com respostas claras, precisas e bem estruturadas. Você também pode gerar resumos, flashcards conceituais e questões de múltipla escolha para testar o conhecimento do usuário.
+
+COMO VOCÊ RECEBE O CONTEÚDO:
+A cada pergunta, o sistema seleciona os trechos mais relevantes dos documentos escolhidos pelo usuário e os envia abaixo, no formato "Documento: nome do arquivo" seguido de "Trecho: texto". Você NÃO recebe os documentos completos, apenas esses trechos.
 
 REGRAS DE OPERAÇÃO:
-1. **Formato de Resposta**: A resposta sempre deve ser gerada com base, primariamente, no conteúdo do artigo ou texto técnico fornecido pelo usuário. Evite respostas genéricas ou que não estejam diretamente relacionadas ao conteúdo analisado. Caso deseje fornecer informações externas adicionais, sinalize claramente que são informações externas e não parte do conteúdo fornecido pelo usuário. Sempre que possível, inclua exemplos práticos, analogias para facilitar a compreensão do usuário.
 
-2. **Estrutura da Resposta**: Comece com uma explicação conceitual sobre o tópico ou problema apresentado caso o usuário solicite uma explicação. Além disso, sempre responda as perguntas do usuário no mesmo idioma em que foram feitas. Caso não encontre o que o usuário solicitou nos documentos fornecidos, informe-o que não foi possível encontrar a informação solicitada nos documentos fornecidos e sugira que ele faça o upload de um documento válido para análise. 
+1. **Fidelidade ao conteúdo**
+- Baseie suas respostas nos trechos fornecidos na mensagem atual. Evite respostas genéricas que não estejam relacionadas a eles.
+- Respostas anteriores da conversa não valem como fonte de fatos sobre os documentos. Use o histórico apenas para entender a que o usuário se refere (por exemplo, em perguntas como "e o segundo?").
+- Se o usuário pedir explicitamente informações externas aos documentos, sinalize com clareza que elas não vêm dos documentos e que podem precisar de verificação. Nunca invente fontes, links ou citações.
 
-* **Explicações Detalhadas**: Cada exemplo deve ser acompanhado de uma explicação detalhada sobre como ele funciona, incluindo a lógica por trás das soluções propostas.
-* **Exemplos Práticos**: Sempre que possível, forneça exemplos práticos que demonstrem a aplicação do conteúdo em situações do cotidiano.
-* **Documentação e Referências**: Ao final, inclua uma seção chamada "Documentação de Referência" que indique de qual documento, previamente fornecido pelo usuário, a informação foi extraída. No caso de o usuário solicitar explicaç~eos detalhadas e resumos. Caso o usuário solicite questões ou flashcards, não precisa incluir, salvo caso em que o usuário solicite explicitamente a referência do documento de origem acompanhado desses métodos.
+2. **Quando a informação não estiver nos trechos**
+- Informe que não foi possível encontrar a informação nos trechos recuperados, esclarecendo que isso não significa, necessariamente, que o documento não a contenha.
+- Sugira que o usuário reformule a pergunta usando palavras que provavelmente aparecem no texto.
+- Se o usuário pedir o resumo de um documento, deixe claro que ele se baseia apenas nos trechos recebidos e pode estar incompleto.
 
-3. **Clareza e Precisão**: Use uma linguagem clara e precisa, evitando jargões desnecessários. Certifique-se de que as explicações sejam compreensíveis.
+3. **Estrutura e conteúdo da resposta**
+- Quando o usuário pedir uma explicação, comece com uma explicação conceitual do tema.
+- Sempre que possível, inclua exemplos práticos ou analogias do cotidiano, acompanhados de uma explicação de como funcionam.
+- Responda sempre no mesmo idioma em que o usuário fez a pergunta.
+
+4. **Fontes**
+- Ao final de explicações detalhadas e resumos, inclua uma seção chamada "Fontes", listando apenas os documentos cujos trechos aparecem na mensagem atual e que você realmente utilizou.
+- Em flashcards e questões de múltipla escolha, não inclua "Fontes", a menos que o usuário peça.
+
+5. **Flashcards e questões**
+- Flashcards: use o formato "Pergunta:" e "Resposta:".
+- Questões de múltipla escolha: use de 4 a 5 alternativas e coloque o gabarito ao final, separado das questões.
+
+6. **Formatação e clareza**
+- Use linguagem clara e precisa, evitando jargões desnecessários.
+- Não use tags HTML (como <br>). Use tabelas apenas com frases curtas nas células; para conteúdos longos, prefira listas.
 """
 
 with st.sidebar:
@@ -70,7 +91,6 @@ with st.sidebar:
         #n_trechos = len(st.session_state.chunks.get(nome, []))
         st.checkbox(f"{nome} ({len(texto)} caracteres)", value=True, key=f"checkbox_{nome}")
 
-
     # Documentos válidos - teste
     # documentos_validos = [nome for nome in st.session_state.docs if st.session_state.get(f"checkbox_{nome}", True)]
     # st.write(f"Documentos selecionados para análise: {', '.join(documentos_validos) if documentos_validos else 'Nenhum documento selecionado.'}")
@@ -109,20 +129,16 @@ elif st.session_state.messages:
 # Captura da entrda do usuário
 if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
 
-    # Transforma todos os documentos .txt em string e insere eles junto ao CUSTOM PROMPT
-    documentos_string = "DOCUMENTOS VÁLIDOS PARA ANÁLISE: \n\n"
-    tem_documento_ativo = False
+    # Transforma todos os documentos em string e insere eles junto ao CUSTOM PROMPT
+    documentos_string = "TRECHOS RELEVANTES DOS DOCUMENTOS VÁLIDOS PARA ANÁLISE: \n\n"
 
-    for nome, texto in st.session_state.docs.items():
-        if st.session_state.get(f"checkbox_{nome}", True):
-            tem_documento_ativo = True
-            documentos_string += f"Nome: {nome} \n Conteúdo: {texto} \n\n\n"
+    nomes_ativos = [nome for nome in st.session_state.docs if st.session_state.get(f"checkbox_{nome}", True)]
 
     if not client:
         st.warning("Por favor, insira sua API key da Groq na barra lateral para continuar.")
         st.stop()
 
-    if not tem_documento_ativo:
+    if not nomes_ativos:
         st.warning("Nenhum documento selecionado para análise. Por favor, selecione pelo menos um documento na barra lateral.")
         st.stop()
 
@@ -130,6 +146,14 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
 
     with st.chat_message("user"):
         st.markdown(prompt)
+
+    trechos = buscar_trechos(prompt, st.session_state.chunks, nomes_ativos)
+
+    if trechos:
+        for nota, nome, pedaco in trechos:
+            documentos_string += f"Nome: {nome}\nConteúdo: {pedaco} \n\n"
+    else:
+        documentos_string += "Não foi possível encontrar trechos relevantes"
 
     messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + st.session_state.messages
 

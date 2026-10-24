@@ -85,4 +85,21 @@ def normalizar(texto):
     palavras = re.findall(r"\w+", texto)
 
     return [p for p in palavras if p not in STOPWORDS]
+
+
+def buscar_trechos(pergunta, chunks_por_doc, nomes_ativos, k=5):
+    palavras_pergunta = set(normalizar(pergunta))
+    resultados = []
+
+    for nome in nomes_ativos:
+        for pedaco in chunks_por_doc.get(nome, []):
+            palavras_pedaco = set(normalizar(pedaco))
+            nota = len(palavras_pedaco & palavras_pergunta)
+
+            if nota > 0:
+                resultados.append((nota, nome, pedaco))
+
+    resultados = sorted(resultados, reverse=True, key=lambda r: r[0])
     
+    return resultados[:k]
+
