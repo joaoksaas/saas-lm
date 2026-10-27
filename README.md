@@ -49,6 +49,6 @@ Assistente de IA para conversar com seus próprios textos e artigos, inspirado n
 - [x] Seleção dos arquivos ativos na conversa
 - [x] Respostas baseadas no conteúdo dos arquivos
 - [x] Suporte a PDF e DOCX
-- [ ] Busca por trechos relevantes (RAG) para arquivos grandes
+- [x] Busca por trechos relevantes (RAG) para arquivos grandes
 - [ ] Citação da fonte em cada resposta
 - [ ] Resumo automático ao enviar um arquivo

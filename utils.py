@@ -2,6 +2,7 @@ import pypdf
 import docx 
 import unicodedata
 import re
+import math
 
 def extrair_texto(arquivo):
     """
@@ -75,31 +76,79 @@ STOPWORDS = {
     "e", "ou", "mas", "que", "se", "como", "quando",
     "qual", "quais", "quem", "onde", "quanto", "quantos", "quantas",
     "foi", "foram", "ser", "sao", "era", "esta", "estao",
-    "ao", "aos", "pelo", "pela", "isso", "esse", "essa", "este", "ha",
+    "ao", "aos", "pelo", "pela", "isso", "esse", "essa",
+    "este", "ha", "livro", "fazer", "autor", "texto", "documento",
+    "menciona",
 }
 
 def normalizar(texto):
-    texto = texto.lower()
-    texto = unicodedata.normalize("NFD", texto)
-    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = remover_acentos(texto)
     palavras = re.findall(r"\w+", texto)
-
     return [p for p in palavras if p not in STOPWORDS]
 
 
-def buscar_trechos(pergunta, chunks_por_doc, nomes_ativos, k=5):
+def buscar_trechos(pergunta, chunks_por_doc, nomes_ativos, k=6):
     palavras_pergunta = set(normalizar(pergunta))
+
+    # 1) lista de candidatos: (nome, pedaço, palavras do pedaço)
+    candidatos = []
+    for nome in nomes_ativos:
+        for pedaco in chunks_por_doc.get(nome, []):
+            candidatos.append((nome, pedaco, set(normalizar(pedaco))))
+
+    N = len(candidatos)
+
+    # 2) df: em quantos pedaços cada palavra da pergunta aparece
+    df = {p: sum(1 for _, _, palavras in candidatos if p in palavras)
+          for p in palavras_pergunta}
+
+    # 3) nota = soma dos pesos das palavras que casaram
+    resultados = []
+    for nome, pedaco, palavras in candidatos:
+        em_comum = palavras_pergunta & palavras
+        nota = sum(math.log(1 + N / df[p]) for p in em_comum)   # lacuna 1: soma de math.log(N / df[p]) para cada p em comum
+        if nota > 0:
+            resultados.append((nota, nome, pedaco))
+
+    resultados = sorted(resultados, reverse=True, key=lambda r: r[0])   # lacuna 2: a mesma ordenação de antes
+    return resultados[:k]
+
+GATILHOS_GENERICOS = [
+    "resum", "sintetiz", "visao geral", "sobre o que", "do que se trata",
+    "principais pontos", "ideias principais", "tema central", "pontos chave",
+    "quiz", "flashcard", "questoes", "multipla escolha", "me teste",
+    "teste meu conhecimento", "explique o documento", "explique o texto",
+    "explique o artigo",
+]
+
+def remover_acentos(texto):
+    texto = unicodedata.normalize("NFD", texto.lower())
+    return "".join(c for c in texto if not unicodedata.combining(c))
+
+def pedido_generico(pergunta):
+    pergunta_limpa = remover_acentos(pergunta)
+    return any(g in pergunta_limpa for g in GATILHOS_GENERICOS)
+
+
+def amostrar_trechos(chunks_por_doc, nomes_ativos, total=6):
+    if not nomes_ativos:
+        return []
+
+    por_doc = max(1, total // len(nomes_ativos))
     resultados = []
 
     for nome in nomes_ativos:
-        for pedaco in chunks_por_doc.get(nome, []):
-            palavras_pedaco = set(normalizar(pedaco))
-            nota = len(palavras_pedaco & palavras_pergunta)
+        pedacos = chunks_por_doc.get(nome, [])
+        tamanho = len(pedacos)
 
-            if nota > 0:
-                resultados.append((nota, nome, pedaco))
+        if tamanho <= por_doc:
+            indices = range(tamanho)
+        elif por_doc == 1:
+            indices = [0]
+        else:
+            indices = [int(i * (tamanho - 1) / (por_doc - 1)) for i in range(por_doc)]
 
-    resultados = sorted(resultados, reverse=True, key=lambda r: r[0])
-    
-    return resultados[:k]
+        for i in indices:
+            resultados.append((0, nome, pedacos[i]))
 
+    return resultados

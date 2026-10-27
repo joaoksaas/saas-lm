@@ -1,4 +1,4 @@
-from utils import extrair_texto, dividir_chunks, buscar_trechos
+from utils import extrair_texto, dividir_chunks, buscar_trechos, pedido_generico, amostrar_trechos, normalizar
 import streamlit as st
 from groq import Groq
 
@@ -44,6 +44,10 @@ REGRAS DE OPERAÇÃO:
 6. **Formatação e clareza**
 - Use linguagem clara e precisa, evitando jargões desnecessários.
 - Não use tags HTML (como <br>). Use tabelas apenas com frases curtas nas células; para conteúdos longos, prefira listas.
+
+7. **Proibições e correções**
+- Nunca afirme que o documento não contém alguma informação requerida pelo usuário, apenas afirme que não foi possível encotrar tal informação nos trechos recuperados.
+- Nunca afirme que os trechos foram enviados pelo usuário. O usuário apenas envia os documentos, os trechos são selecionados automaticamente, nunca afirme que o usuário os enviou.
 """
 
 with st.sidebar:
@@ -86,6 +90,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("Selecione quais arquivos deseja usar para análise:")
+
     
     for nome, texto in st.session_state.docs.items():
         #n_trechos = len(st.session_state.chunks.get(nome, []))
@@ -98,6 +103,8 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("Desenvolvido para auxiliar no estudo e compreensão de artigos científicos e textos técnicos, fornecendo explicações detalhadas, exemplos práticos e recursos adicionais para aprimorar o aprendizado.")
+
+    modo_debug = st.sidebar.checkbox("Modo debug", value=False, key="checkbox_modo_debug")
 
 st.title("Saas LM")
 
@@ -129,9 +136,6 @@ elif st.session_state.messages:
 # Captura da entrda do usuário
 if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
 
-    # Transforma todos os documentos em string e insere eles junto ao CUSTOM PROMPT
-    documentos_string = "TRECHOS RELEVANTES DOS DOCUMENTOS VÁLIDOS PARA ANÁLISE: \n\n"
-
     nomes_ativos = [nome for nome in st.session_state.docs if st.session_state.get(f"checkbox_{nome}", True)]
 
     if not client:
@@ -142,20 +146,39 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
         st.warning("Nenhum documento selecionado para análise. Por favor, selecione pelo menos um documento na barra lateral.")
         st.stop()
 
-    st.session_state.messages.append({"role":"user","content":prompt})
+    if pedido_generico(prompt):
+        trechos = amostrar_trechos(st.session_state.chunks, nomes_ativos)
+        documentos_string = (
+            "TRECHOS AMOSTRADOS DOS DOCUMENTOS SELECIONADOS"
+            "(espalhados ao longo de cada documento, não escolhidos pela pergunta):\n\n"
+        )
+        
+    else:
+        trechos = buscar_trechos(prompt, st.session_state.chunks, nomes_ativos)  
+        documentos_string = "TRECHOS DOS DOCUMENTOS SELECIONADOS MAIS RELEVANTES PARA A PERGUNTA:\n\n"
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    trechos = buscar_trechos(prompt, st.session_state.chunks, nomes_ativos)
+    if modo_debug:
+        palavras_pergunta = set(normalizar(prompt))
+        with st.expander("Trechos enviados à IA (debug)"):
+            for nota, nome, pedaco in trechos:
+                casadas = palavras_pergunta & set(normalizar(pedaco))
+                st.caption(f"nota {nota} | casaram: {', '.join(sorted(casadas))}")
+                st.text(pedaco[:300])
+
 
     if trechos:
-        for nota, nome, pedaco in trechos:
+        for _, nome, pedaco in trechos:
             documentos_string += f"Nome: {nome}\nConteúdo: {pedaco} \n\n"
     else:
         documentos_string += "Não foi possível encontrar trechos relevantes"
 
-    messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + st.session_state.messages
+
+    st.session_state.messages.append({"role":"user","content":prompt})
+
+    messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + st.session_state.messages[-7:] # Últimas 4 (incluindo a atual) perguntas e 3 respostas
 
     with st.chat_message("assistant"):
         with st.spinner("Gerando resposta..."):
