@@ -78,7 +78,9 @@ STOPWORDS = {
     "foi", "foram", "ser", "sao", "era", "esta", "estao",
     "ao", "aos", "pelo", "pela", "isso", "esse", "essa",
     "este", "ha", "livro", "fazer", "autor", "texto", "documento",
-    "menciona",
+    "menciona", "primeiro", "primeira", "segundo", "segunda", "terceiro",
+    "terceira", "quarto", "quarta", "quinto", "quinta","explique",
+    "melhor", "detalhe", "detalhes", "continue",
 }
 
 def normalizar(texto):
@@ -152,3 +154,34 @@ def amostrar_trechos(chunks_por_doc, nomes_ativos, total=6):
             resultados.append((0, nome, pedacos[i]))
 
     return resultados
+
+REFERENCIAS = {
+    "primeiro", "primeira", "segundo", "segunda", "terceiro", "terceira",
+    "quarto", "quarta", "quinto", "quinta", "anterior", "isso", "essa", "esse", "continue",
+}
+FRASES_ACOMPANHAMENTO = ["explique melhor", "mais detalhes", "detalhe melhor", "pode explicar"]
+
+def pergunta_de_acompanhamento(pergunta, max_palavras=5):
+    limpa = remover_acentos(pergunta)
+    palavras = re.findall(r"\w+", limpa)
+
+    if len(palavras) > max_palavras:
+        return False
+
+    return any(p in REFERENCIAS for p in palavras) or any(f in limpa for f in FRASES_ACOMPANHAMENTO)
+
+
+def montar_consulta(pergunta, mensagens):
+    """Para acompanhamentos, junta a última pergunta com assunto à consulta da busca."""
+    if not pergunta_de_acompanhamento(pergunta):
+        return pergunta
+
+    for msg in reversed(mensagens):
+        if (msg["role"] == "user"
+                and not pergunta_de_acompanhamento(msg["content"])
+                and normalizar(msg["content"])):
+            return msg["content"] + " " + pergunta
+
+    return pergunta
+
+

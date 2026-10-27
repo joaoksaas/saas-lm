@@ -1,6 +1,6 @@
-from utils import extrair_texto, dividir_chunks, buscar_trechos, pedido_generico, amostrar_trechos, normalizar
+from utils import extrair_texto, dividir_chunks, buscar_trechos, pedido_generico, amostrar_trechos, montar_consulta, normalizar
 import streamlit as st
-from groq import Groq
+from groq import Groq, RateLimitError, AuthenticationError, APIConnectionError, APIStatusError
 
 
 st.set_page_config(
@@ -11,43 +11,43 @@ st.set_page_config(
 )
 
 CUSTOM_PROMPT = """
-Você é o "Saas LM", um assistente de estudo especializado em leitura e interpretação de artigos científicos e textos técnicos. Seu objetivo é ajudar o usuário a compreender o conteúdo dos documentos que ele enviou, com respostas claras, precisas e bem estruturadas. Você também pode gerar resumos, flashcards conceituais e questões de múltipla escolha para testar o conhecimento do usuário.
+Você é o "Saas LM", um assistente de estudo especializado em leitura e interpretação de artigos científicos e textos técnicos. Seu objetivo é ajudar o usuário a compreender o conteúdo dos documentos que ele carregou, com respostas claras, precisas e bem estruturadas. Você também pode gerar resumos, flashcards conceituais e questões de múltipla escolha para testar o conhecimento do usuário.
 
 COMO VOCÊ RECEBE O CONTEÚDO:
-A cada pergunta, o sistema seleciona os trechos mais relevantes dos documentos escolhidos pelo usuário e os envia abaixo, no formato "Documento: nome do arquivo" seguido de "Trecho: texto". Você NÃO recebe os documentos completos, apenas esses trechos.
+A cada pergunta, o sistema seleciona automaticamente trechos dos documentos escolhidos pelo usuário e os apresenta ao final desta mensagem, no formato "Documento: nome do arquivo" seguido de "Trecho: texto". Esses são os "trechos recuperados". Você NÃO recebe os documentos completos. O usuário carrega os documentos, mas não escolhe os trechos: nunca diga que ele os enviou.
+O cabeçalho que precede os trechos indica como eles foram obtidos:
+- "mais relevantes para a pergunta": escolhidos pelas palavras da pergunta;
+- "amostrados": espalhados ao longo de cada documento, sem relação com a pergunta (usado em pedidos de resumo, visão geral e quiz).
 
 REGRAS DE OPERAÇÃO:
 
-1. **Fidelidade ao conteúdo**
-- Baseie suas respostas nos trechos fornecidos na mensagem atual. Evite respostas genéricas que não estejam relacionadas a eles.
-- Respostas anteriores da conversa não valem como fonte de fatos sobre os documentos. Use o histórico apenas para entender a que o usuário se refere (por exemplo, em perguntas como "e o segundo?").
-- Se o usuário pedir explicitamente informações externas aos documentos, sinalize com clareza que elas não vêm dos documentos e que podem precisar de verificação. Nunca invente fontes, links ou citações.
+1. **Fidelidade aos documentos**
+- Responda exclusivamente com base nos trechos recuperados na mensagem atual. Não use conhecimento externo, mesmo que o usuário peça, e não ofereça informações de fora dos documentos por iniciativa própria. Se o usuário pedir algo que exija conhecimento externo, explique que este assistente responde apenas com base nos documentos selecionados e que essa informação deve ser buscada em outra fonte.
+- Respostas anteriores da conversa não valem como fonte de fatos. Use o histórico apenas para entender a que o usuário se refere (por exemplo, em "e o segundo?").
+- Nunca invente fontes, links, citações ou nomes.
 
 2. **Quando a informação não estiver nos trechos**
-- Informe que não foi possível encontrar a informação nos trechos recuperados, esclarecendo que isso não significa, necessariamente, que o documento não a contenha.
+- Diga que não foi possível encontrar a informação nos trechos recuperados. Nunca afirme que o documento "não menciona", "não contém" ou "não trata" de algo, porque você viu apenas parte dele.
 - Sugira que o usuário reformule a pergunta usando palavras que provavelmente aparecem no texto.
-- Se o usuário pedir o resumo de um documento, deixe claro que ele se baseia apenas nos trechos recebidos e pode estar incompleto.
+- Em resumos e visões gerais, avise que o resultado se baseia apenas nos trechos recuperados e pode estar incompleto.
 
 3. **Estrutura e conteúdo da resposta**
-- Quando o usuário pedir uma explicação, comece com uma explicação conceitual do tema.
-- Sempre que possível, inclua exemplos práticos ou analogias do cotidiano, acompanhados de uma explicação de como funcionam.
-- Responda sempre no mesmo idioma em que o usuário fez a pergunta.
+- Responda no mesmo idioma da pergunta.
+- Quando o usuário pedir uma explicação, comece pelo conceito e, sempre que possível, ilustre com exemplos ou analogias do cotidiano, explicando como funcionam.
+- Use linguagem clara e precisa, evitando jargões desnecessários.
 
 4. **Fontes**
-- Ao final de explicações detalhadas e resumos, inclua uma seção chamada "Fontes", listando apenas os documentos cujos trechos aparecem na mensagem atual e que você realmente utilizou.
+- Ao final de explicações detalhadas e resumos, inclua uma seção "Fontes" com o nome dos documentos cujos trechos você realmente utilizou.
 - Em flashcards e questões de múltipla escolha, não inclua "Fontes", a menos que o usuário peça.
 
 5. **Flashcards e questões**
 - Flashcards: use o formato "Pergunta:" e "Resposta:".
-- Questões de múltipla escolha: use de 4 a 5 alternativas e coloque o gabarito ao final, separado das questões.
+- Questões de múltipla escolha: 4 a 5 alternativas, com o gabarito ao final, separado das questões.
 
-6. **Formatação e clareza**
-- Use linguagem clara e precisa, evitando jargões desnecessários.
-- Não use tags HTML (como <br>). Use tabelas apenas com frases curtas nas células; para conteúdos longos, prefira listas.
-
-7. **Proibições e correções**
-- Nunca afirme que o documento não contém alguma informação requerida pelo usuário, apenas afirme que não foi possível encotrar tal informação nos trechos recuperados.
-- Nunca afirme que os trechos foram enviados pelo usuário. O usuário apenas envia os documentos, os trechos são selecionados automaticamente, nunca afirme que o usuário os enviou.
+6. **Formatação (importante)**
+- A interface exibe apenas Markdown puro. Qualquer tag HTML (como as de quebra de linha) aparece como texto literal e estraga a leitura. Nunca use tags HTML.
+- Para organizar informação, prefira parágrafos curtos e listas em Markdown (com "-" ou numeração).
+- Use tabelas somente para comparar itens, com frases curtas e uma única linha de texto por célula. Se precisar listar vários pontos sobre um item, faça uma lista fora da tabela.
 """
 
 with st.sidebar:
@@ -112,6 +112,14 @@ st.subheader("Assistente de Estudo para Artigos Científicos e Textos Técnicos"
 
 st.caption("Digite sua pergunta ou problema de estudo e o assistente fornecerá explicações detalhadas, exemplos práticos, resumos e recursos adicionais para aprimorar seu aprendizado.")
 
+def mostrar_trechos(trechos, amostrados=False):
+        with st.expander(f"Ver trechos consultados pela IA ({len(trechos)})"):
+            if amostrados:
+                st.caption("Trechos amostrados dos documentos (não escolhidos pela pergunta).")
+            for i, (nome, pedaco) in enumerate(trechos, start=1):
+                st.caption(f"{i}. {nome}")
+                st.text(" ".join(pedaco.split()))
+
 # Inicializa o histórico de mensagens, caso não exista
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -119,6 +127,8 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        if message.get("trechos"):
+            mostrar_trechos(message["trechos"], message.get("amostrados", False))
 
 client = None 
 
@@ -146,7 +156,11 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
         st.warning("Nenhum documento selecionado para análise. Por favor, selecione pelo menos um documento na barra lateral.")
         st.stop()
 
-    if pedido_generico(prompt):
+    consulta = montar_consulta(prompt, st.session_state.messages)
+
+    usou_amostra = pedido_generico(prompt) or not normalizar(consulta)        
+
+    if usou_amostra:
         trechos = amostrar_trechos(st.session_state.chunks, nomes_ativos)
         documentos_string = (
             "TRECHOS AMOSTRADOS DOS DOCUMENTOS SELECIONADOS"
@@ -154,19 +168,21 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
         )
         
     else:
-        trechos = buscar_trechos(prompt, st.session_state.chunks, nomes_ativos)  
+        trechos = buscar_trechos(consulta, st.session_state.chunks, nomes_ativos)  
         documentos_string = "TRECHOS DOS DOCUMENTOS SELECIONADOS MAIS RELEVANTES PARA A PERGUNTA:\n\n"
+
+    trechos_usados = [(nome, pedaco) for _, nome, pedaco in trechos]
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
     if modo_debug:
-        palavras_pergunta = set(normalizar(prompt))
+        palavras_pergunta = set(normalizar(consulta))
         with st.expander("Trechos enviados à IA (debug)"):
             for nota, nome, pedaco in trechos:
                 casadas = palavras_pergunta & set(normalizar(pedaco))
                 st.caption(f"nota {nota} | casaram: {', '.join(sorted(casadas))}")
-                st.text(pedaco[:300])
+                st.text(pedaco)
 
 
     if trechos:
@@ -178,9 +194,13 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
 
     st.session_state.messages.append({"role":"user","content":prompt})
 
-    messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + st.session_state.messages[-7:] # Últimas 4 (incluindo a atual) perguntas e 3 respostas
+    historico = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-7:]] # Últimas 4 (incluindo a atual) perguntas e 3 respostas
+
+    messages_for_api = [{"role": "system", "content": (CUSTOM_PROMPT + "\n\n" + documentos_string)}] + historico
 
     with st.chat_message("assistant"):
+        mensagem_erro = None
+
         with st.spinner("Gerando resposta..."):
             try:
                 chat_completion = client.chat.completions.create(
@@ -194,8 +214,32 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
 
                 st.markdown(ai_response)
 
-                st.session_state.messages.append({"role":"assistant", "content":ai_response})
+                if trechos_usados:
+                    mostrar_trechos(trechos_usados, usou_amostra)
 
+                st.session_state.messages.append({
+                    "role":"assistant",
+                    "content":ai_response,
+                    "trechos": trechos_usados,
+                    "amostrados": usou_amostra
+                })
+
+
+            except RateLimitError:
+                mensagem_erro = "Limite de uso da Groq atingido (requisições ou tokens por minuto). Aguarde cerca de um minuto e tente novamente."
+            except AuthenticationError:
+                mensagem_erro = "Chave de API inválida. Confira a chave inserida na barra lateral."
+            except APIConnectionError:
+                mensagem_erro = "Não foi possível conectar ao serviço da Groq. Verifique sua conexão e tente novamente."
+            except APIStatusError as e:
+                if e.status_code == 413:
+                    mensagem_erro = "A requisição ficou grande demais para o limite do modelo. Tente uma pergunta mais curta ou desmarque alguns documentos."
+                else:
+                    mensagem_erro = f"Erro da API da Groq (código {e.status_code}). Tente novamente em instantes."
             except Exception as e:
-                st.error(f"Erro ao gerar resposta: {e}")
-                st.stop()
+                mensagem_erro = f"Erro ao gerar resposta: {e}"
+
+        if mensagem_erro:
+            st.session_state.messages.pop()
+            st.error(mensagem_erro)
+            st.stop()
