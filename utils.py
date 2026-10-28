@@ -36,6 +36,8 @@ def extrair_texto(arquivo):
     else:
         raise ValueError("Formato de arquivo não suportado. Por favor, envie um arquivo PDF, DOCX ou TXT.")
 
+    texto = limpar_texto(texto, juntar_linhas=nome.lower().endswith(".pdf"))
+
     if not texto.strip():
         return None
 
@@ -43,7 +45,31 @@ def extrair_texto(arquivo):
 
 # Funções de RAG
 
-def dividir_chunks(texto, tamanho=1000, sobreposicao=200):
+FIM_DE_FRASE = ".!?…"
+FECHAMENTOS = "”\"')]"
+
+def ponto_de_corte(texto, fim, tolerancia):
+    """Escolhe onde terminar o pedaço, olhando até a tolerancia de caracteres para trás a partir do fim."""
+
+    limite = fim - tolerancia
+    n = len(texto)
+
+    # 1) preferência: terminar no fim de uma frase
+    for c in range(fim, limite, -1):
+        if c < n and texto[c].isspace():
+            anterior = texto[c - 1]
+            if anterior in FIM_DE_FRASE or (anterior in FECHAMENTOS and c >= 2 and texto[c - 2] in FIM_DE_FRASE):
+                return c
+
+    # 2) senão: terminar no fim de uma palavra
+    for c in range(fim, limite, -1):
+        if c < n and texto[c].isspace():
+            return c
+
+    # 3) sem espaços na janela: corte seco
+    return fim
+
+def dividir_chunks(texto, tamanho=1000, sobreposicao=200, tolerancia=150):
     """
     Divide o texto em chunks de tamanho especificado com sobreposicao.
     """
@@ -54,18 +80,34 @@ def dividir_chunks(texto, tamanho=1000, sobreposicao=200):
     if sobreposicao >= tamanho:
         raise ValueError("A sobreposição deve ser menor que o tamanho do chunk.")
     
-    passo = tamanho - sobreposicao
-
     chunks = []
+    n = len(texto)
+    inicio = 0
 
-    for inicio in range(0, len(texto), passo):
-        pedaco = texto[inicio:inicio + tamanho]
+    while inicio < n:
+        if inicio > 0:
+            limite = min(inicio + tolerancia, n)
+            c = inicio
 
+            while c < limite and not texto[c - 1].isspace():
+                c += 1
+            if c < limite or (c == limite and texto[c-1].isspace()):
+                inicio = c
+
+        fim = min(inicio + tamanho, n)
+
+        if fim < n:
+            fim = ponto_de_corte(texto, fim, tolerancia)
+
+        pedaco = texto[inicio:fim]
+        
         if pedaco.strip():
             chunks.append(pedaco)
 
-        if inicio + tamanho >= len(texto):
+        if fim >= n:
             break
+
+        inicio = max(fim - sobreposicao, inicio + 1)
 
     return chunks
 
@@ -184,4 +226,19 @@ def montar_consulta(pergunta, mensagens):
 
     return pergunta
 
+def limpar_texto(texto, juntar_linhas=False):
+    """
+    Limpa ruídos de formatação.
+    - juntar_linhas=False (txt, docx): mantém as quebras de linha, só tira excessos.
+    - juntar_linhas=True (pdf): junta tudo em um fluxo contínuo de texto.
+    """
+    texto = texto.replace("\r\n", "\n").replace("\r", "\n")
 
+    if juntar_linhas:
+        texto = re.sub(r"(\w)-\n(\w)", r"\1\2", texto)   # palavra quebrada por hífen no fim da linha
+        texto = re.sub(r"\s+", " ", texto)               # qualquer sequência de espaços/quebras vira um espaço
+    else:
+        texto = re.sub(r"[ \t]+", " ", texto)            # espaços repetidos
+        texto = re.sub(r"\n{3,}", "\n\n", texto)         # 3+ quebras viram 2
+
+    return texto.strip()

@@ -104,7 +104,12 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("Desenvolvido para auxiliar no estudo e compreensão de artigos científicos e textos técnicos, fornecendo explicações detalhadas, exemplos práticos e recursos adicionais para aprimorar o aprendizado.")
 
-    modo_debug = st.sidebar.checkbox("Modo debug", value=False, key="checkbox_modo_debug")
+    with st.expander("Avançado"):
+       modo_debug = st.checkbox(
+           "Modo debug (mostra notas e palavras da busca)",
+           value=False,
+           key="modo_debug",
+       )
 
 st.title("Saas LM")
 
