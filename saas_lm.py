@@ -1,4 +1,4 @@
-from utils import extrair_texto, dividir_chunks, buscar_trechos, pedido_generico, amostrar_trechos, montar_consulta, normalizar
+from utils import extrair_texto, dividir_chunks, buscar_trechos, pedido_generico, amostrar_trechos, montar_consulta, documentos_citados, normalizar
 import streamlit as st
 from groq import Groq, RateLimitError, AuthenticationError, APIConnectionError, APIStatusError
 
@@ -29,22 +29,27 @@ REGRAS DE OPERAÇÃO:
 2. **Quando a informação não estiver nos trechos**
 - Diga que não foi possível encontrar a informação nos trechos recuperados. Nunca afirme que o documento "não menciona", "não contém" ou "não trata" de algo, porque você viu apenas parte dele.
 - Sugira que o usuário reformule a pergunta usando palavras que provavelmente aparecem no texto.
-- Em resumos e visões gerais, avise que o resultado se baseia apenas nos trechos recuperados e pode estar incompleto.
 
-3. **Estrutura e conteúdo da resposta**
+3. **Resumos, visões gerais, flashcards e questões**
+- Nesses pedidos, os trechos vêm amostrados (o cabeçalho diz "amostrados"): são fragmentos espalhados do documento, e não a resposta a uma pergunta específica.
+- Faça sempre o melhor trabalho possível com o que recebeu, descrevendo apenas o que aparece nos trechos. Não recuse e não diga que "não há informações suficientes" só porque os trechos cobrem uma parte do documento.
+- Ao final, avise em uma frase que o resultado se baseia em trechos amostrados e pode estar incompleto.
+- Se os trechos forem apenas material editorial (capa, sumário, prefácio), diga isso e peça ao usuário que indique um tema ou capítulo.
+
+4. **Estrutura e conteúdo da resposta**
 - Responda no mesmo idioma da pergunta.
 - Quando o usuário pedir uma explicação, comece pelo conceito e, sempre que possível, ilustre com exemplos ou analogias do cotidiano, explicando como funcionam.
 - Use linguagem clara e precisa, evitando jargões desnecessários.
 
-4. **Fontes**
+5. **Fontes**
 - Ao final de explicações detalhadas e resumos, inclua uma seção "Fontes" com o nome dos documentos cujos trechos você realmente utilizou.
 - Em flashcards e questões de múltipla escolha, não inclua "Fontes", a menos que o usuário peça.
 
-5. **Flashcards e questões**
+6. **Flashcards e questões**
 - Flashcards: use o formato "Pergunta:" e "Resposta:".
 - Questões de múltipla escolha: 4 a 5 alternativas, com o gabarito ao final, separado das questões.
 
-6. **Formatação (importante)**
+7. **Formatação (importante)**
 - A interface exibe apenas Markdown puro. Qualquer tag HTML (como as de quebra de linha) aparece como texto literal e estraga a leitura. Nunca use tags HTML.
 - Para organizar informação, prefira parágrafos curtos e listas em Markdown (com "-" ou numeração).
 - Use tabelas somente para comparar itens, com frases curtas e uma única linha de texto por célula. Se precisar listar vários pontos sobre um item, faça uma lista fora da tabela.
@@ -59,6 +64,10 @@ with st.sidebar:
         "Insira sua chave de API Groq:", type="password",
         help="Obtenha a chave em https://console.groq.com/keys"
         )
+
+    if st.button("Limpar conversa"):
+        st.session_state.messages = []
+        st.rerun()
 
     st.markdown("---")
     if "docs" not in st.session_state:
@@ -110,6 +119,8 @@ with st.sidebar:
            value=False,
            key="modo_debug",
        )
+
+
 
 st.title("Saas LM")
 
@@ -166,12 +177,12 @@ if prompt := st.chat_input("Digite sua pergunta ou problema de estudo aqui..."):
     usou_amostra = pedido_generico(prompt) or not normalizar(consulta)        
 
     if usou_amostra:
-        trechos = amostrar_trechos(st.session_state.chunks, nomes_ativos)
+        citados = documentos_citados(prompt, nomes_ativos)
+        trechos = amostrar_trechos(st.session_state.chunks, citados or nomes_ativos)
         documentos_string = (
-            "TRECHOS AMOSTRADOS DOS DOCUMENTOS SELECIONADOS"
+            "TRECHOS AMOSTRADOS DOS DOCUMENTOS SELECIONADOS "
             "(espalhados ao longo de cada documento, não escolhidos pela pergunta):\n\n"
-        )
-        
+        )    
     else:
         trechos = buscar_trechos(consulta, st.session_state.chunks, nomes_ativos)  
         documentos_string = "TRECHOS DOS DOCUMENTOS SELECIONADOS MAIS RELEVANTES PARA A PERGUNTA:\n\n"

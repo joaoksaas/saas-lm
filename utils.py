@@ -242,3 +242,14 @@ def limpar_texto(texto, juntar_linhas=False):
         texto = re.sub(r"\n{3,}", "\n\n", texto)         # 3+ quebras viram 2
 
     return texto.strip()
+
+def documentos_citados(pergunta, nomes_ativos):
+    palavras_pergunta = set(normalizar(pergunta))
+    citados = []
+
+    for nome in nomes_ativos:
+        base = nome.rsplit(".", 1)[0].replace("_", " ")
+        if palavras_pergunta & set(normalizar(base)):
+            citados.append(nome)
+
+    return citados
