@@ -4,7 +4,7 @@ Assistente de estudo para conversar com seus próprios textos e artigos, no esti
 
 Projeto de estudo, desenvolvido a partir de um exercício do curso Fundamentos de Linguagem Python da Data Science Academy (DSA).
 
-🔗 **Demo:** _(adicione o link depois do deploy)_
+🔗 **Demo:** [Saas LM](https://saas-lm.streamlit.app/)
 
 ## Funcionalidades
 
@@ -40,8 +40,8 @@ O app usa uma versão simples de **RAG** (geração aumentada por recuperação)
 1. Clone o repositório:
 
    ```bash
-   git clone <url-do-repositorio>
-   cd <nome-da-pasta>
+   git clone https://github.com/joaoksaas/saas-lm.git
+   cd saas-lm
    ```
 
 2. (Recomendado) Crie um ambiente virtual e instale as dependências:
